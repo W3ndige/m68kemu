@@ -1,95 +1,59 @@
 package cpu
 
 import (
-	"errors"
 	"fmt"
-	"m68kemu/internal/memory"
 )
+
+type OpcodeType uint16
 
 const (
-	RESET = 0x4e70
-	NOP   = 0x4e71
-	STOP  = 0x4e72
-	RTE   = 0x4e73
-	RTS   = 0x4e75
-	TRAPV = 0x4e76
-	RTR   = 0x4e77
+	ORI  OpcodeType = 0
+	ANDI OpcodeType = iota
 
-	OP_SIZE_BYTE = 0x00
-	OP_SIZE_WORD = 0x01
-	OP_SIZE_LONG = 0x02
-
-	ADDR_MODE_DATA_REGISTER    = 0x0
-	ADDR_MODE_ADDRESS_REGISTER = 0x1
-	ADDR_MODE_IMMEDIATE        = 0x7
+	RESET OpcodeType = 0x4e70
+	NOP   OpcodeType = 0x4e71
+	STOP  OpcodeType = 0x4e72
+	RTE   OpcodeType = 0x4e73
+	RTS   OpcodeType = 0x4e75
+	TRAPV OpcodeType = 0x4e76
+	RTR   OpcodeType = 0x4e77
 )
 
-type Instruction struct {
-	address        uint
-	opcode         uint16
-	name           string
-	operand        uint32
-	operandSize    uint16
-	addressingMode uint8
-	registerField  uint8
+type operandSize uint8
+
+const (
+	OpSizeByte operandSize = 0x00
+	OpSizeWord operandSize = 0x01
+	OpSizeLong operandSize = 0x02
+)
+
+func (opSize operandSize) isValid() bool {
+	if opSize != OpSizeByte && opSize != OpSizeWord && opSize != OpSizeLong {
+		return false
+	}
+
+	return true
 }
 
-func (instr *Instruction) ReadOperand(memory *memory.Memory) (uint32, error) {
-	if instr.operandSize != OP_SIZE_BYTE && instr.operandSize != OP_SIZE_WORD && instr.operandSize != OP_SIZE_LONG {
-		return 0, errors.New(fmt.Sprintf("operand size 0x%x invalid", instr.operandSize))
-	}
-
-	if instr.operandSize == OP_SIZE_BYTE {
-		operand, err := memory.ReadByteAt(instr.address + 2)
-		if err != nil {
-			return 0, err
-		}
-		instr.operand = uint32(operand)
-	} else if instr.operandSize == OP_SIZE_WORD {
-		operand, err := memory.ReadWordAt(instr.address + 2)
-		if err != nil {
-			return 0, err
-		}
-
-		instr.operand = uint32(operand)
-	} else {
-		return 0, errors.New("operand size is invalid")
-	}
-
-	return instr.operand, nil
-}
-
-func (instr *Instruction) parseORI(memory *memory.Memory) error {
-	if instr.opcode == 0 {
-		return errors.New("invalid opcode for ORI")
-	}
-
-	lowerOpcode := instr.opcode & 0xff
-	switch lowerOpcode {
-	case 0x3c:
-		instr.operandSize = OP_SIZE_BYTE
-		instr.addressingMode = ADDR_MODE_IMMEDIATE
-		_, err := instr.ReadOperand(memory)
-		if err != nil {
-			return err
-		}
-	case 0x7c:
-		instr.operandSize = OP_SIZE_WORD
-		instr.addressingMode = ADDR_MODE_IMMEDIATE
-		_, err := instr.ReadOperand(memory)
-		if err != nil {
-			return err
-		}
+func (opSize operandSize) getSizeInBytes() (uint8, error) {
+	switch opSize {
+	case OpSizeByte:
+		return 1, nil
+	case OpSizeWord:
+		return 2, nil
+	case OpSizeLong:
+		return 4, nil
 	default:
-		instr.operandSize = lowerOpcode >> 6
-		_, err := instr.ReadOperand(memory)
-		if err != nil {
-			return err
-		}
-
-		instr.addressingMode = uint8((lowerOpcode >> 3) & 0b111)
-		instr.registerField = uint8(lowerOpcode & 0b111)
+		return 0, fmt.Errorf("invalid operand size 0x%x", opSize)
 	}
-
-	return nil
 }
+
+type RegisterType uint8
+
+const (
+	RegisterNone RegisterType = iota
+	RegisterPC
+	RegisterSP
+	RegisterSR
+	RegisterCCR
+)

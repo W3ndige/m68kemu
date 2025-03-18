@@ -71,73 +71,124 @@ func (cpu *CPU) SetStatusRegister(value uint16) {
 }
 
 func (cpu *CPU) GetConditionCodeRegister() uint8 {
-	return uint8(cpu.statusRegister & 0xF)
+	return uint8(cpu.statusRegister & 0xFF)
 }
 
 func (cpu *CPU) SetConditionCodeRegister(value uint8) {
-	panic("not implemented")
+	cpu.statusRegister = (cpu.statusRegister & 0xFF00) | uint16(value)
 }
 
-func (cpu *CPU) fetchAndExecute() (Instruction, error) {
-	var instruction Instruction
-	if uint(cpu.programCounter) >= cpu.memory.Size {
-		return Instruction{name: "EOF"}, nil
+func (cpu *CPU) GetRegisterValue(registerType RegisterType) uint32 {
+	var registerValue uint32
+	if registerType == RegisterSR {
+		registerValue = uint32(cpu.GetStatusRegister())
+	} else if registerType == RegisterCCR {
+		registerValue = uint32(cpu.GetConditionCodeRegister())
+	} else {
+		panic("unimplmented")
 	}
 
+	return registerValue
+}
+
+func (cpu *CPU) fetchAndExecute() error {
 	opcode, err := cpu.memory.ReadWordAt(uint(cpu.programCounter))
 	if err != nil {
-		instruction.name = "EOF"
-		return instruction, err
+		return err
 	}
 
-	instruction.opcode = opcode
-	instruction.address = uint(cpu.programCounter)
-
-	switch opcode {
+	switch OpcodeType(opcode) {
 	case RESET:
-		instruction.name = "RESET"
 		cpu.programCounter += 2
 	case NOP:
-		instruction.name = "NOP"
 		cpu.programCounter += 2
 	case STOP:
-		instruction.name = "STOP"
-		instruction.operandSize = OP_SIZE_WORD
-		_, err := instruction.ReadOperand(cpu.memory)
+		_, err = cpu.memory.ReadWordAt(uint(cpu.programCounter + 2))
 		if err != nil {
-			return instruction, err
+			return err
 		}
 
 		cpu.programCounter += 4
 	case RTE:
-		instruction.name = "RTE"
 		cpu.programCounter += 2
 	case RTS:
-		instruction.name = "RTS"
 		cpu.programCounter += 2
 	case TRAPV:
-		instruction.name = "TRAPV"
 		cpu.programCounter += 2
 	case RTR:
-		instruction.name = "RTR"
 		cpu.programCounter += 2
 	default:
 		higherOpcode := opcode >> 8
-		switch higherOpcode {
-		case 0x00:
-			instruction.name = "ORI"
-			err := instruction.parseORI(cpu.memory)
+		switch OpcodeType(higherOpcode) {
+		case ORI:
+			err := cpu.ORI(opcode)
 			if err != nil {
-				return instruction, err
+				return err
+			}
+		case ANDI:
+			err := cpu.ANDI(opcode)
+			if err != nil {
+				return err
 			}
 
-			cpu.programCounter += 2 + uint32(instruction.operandSize+1)
-
 		default:
-			instruction.name = "INVALID"
-			return instruction, errors.New("unknown opcode")
+			return errors.New("unknown opcode")
 		}
 	}
 
-	return instruction, nil
+	return nil
+}
+
+func (cpu *CPU) ORI(opcode uint16) error {
+	lowerOpcode := opcode & 0xFF
+	switch lowerOpcode {
+	case 0x3c:
+		operand, err := cpu.memory.ReadByteAt(uint(cpu.programCounter + 2))
+		if err != nil {
+			return err
+		}
+
+		cpu.SetConditionCodeRegister(cpu.GetConditionCodeRegister() | operand)
+
+		cpu.programCounter += 4
+	case 0x7c:
+		operand, err := cpu.memory.ReadWordAt(uint(cpu.programCounter + 2))
+		if err != nil {
+			return err
+		}
+
+		cpu.SetStatusRegister(cpu.GetStatusRegister() | operand)
+		cpu.programCounter += 4
+	default:
+		panic("not implemented")
+	}
+
+	return nil
+}
+
+func (cpu *CPU) ANDI(opcode uint16) error {
+	lowerOpcode := opcode & 0xFF
+	switch lowerOpcode {
+	case 0x3c:
+		operand, err := cpu.memory.ReadByteAt(uint(cpu.programCounter + 2))
+		if err != nil {
+			return err
+		}
+
+		cpu.SetConditionCodeRegister(cpu.GetConditionCodeRegister() & operand)
+
+		cpu.programCounter += 4
+	case 0x7c:
+		operand, err := cpu.memory.ReadWordAt(uint(cpu.programCounter + 2))
+		if err != nil {
+			return err
+		}
+
+		cpu.SetStatusRegister(cpu.GetStatusRegister() & operand)
+		cpu.programCounter += 4
+	default:
+		panic("not implemented")
+	}
+
+	return nil
 }

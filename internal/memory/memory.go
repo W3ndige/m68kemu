@@ -26,7 +26,7 @@ func NewMemoryFromArray(data []uint8) *Memory {
 }
 
 func (memory *Memory) ReadByteAt(address uint) (uint8, error) {
-	if address < 0 || address > memory.Size {
+	if address < 0 || address > memory.Size-1 {
 		return 0, errors.New(fmt.Sprintf("address {:%x} out of range", address))
 	}
 
@@ -34,7 +34,7 @@ func (memory *Memory) ReadByteAt(address uint) (uint8, error) {
 }
 
 func (memory *Memory) WriteByteAt(address uint, value uint8) error {
-	if address < 0 || address > memory.Size {
+	if address < 0 || address > memory.Size-1 {
 		return errors.New(fmt.Sprintf("address 0x%x out of range [0...0x%x]", address, memory.Size))
 	}
 
@@ -43,7 +43,7 @@ func (memory *Memory) WriteByteAt(address uint, value uint8) error {
 }
 
 func (memory *Memory) ReadWordAt(address uint) (uint16, error) {
-	if address < 0 || address+1 > memory.Size {
+	if address < 0 || address > memory.Size-2 {
 		return 0, errors.New(fmt.Sprintf("address 0x%x out of range [0...0x%x]", address, memory.Size))
 	}
 
@@ -54,7 +54,7 @@ func (memory *Memory) ReadWordAt(address uint) (uint16, error) {
 }
 
 func (memory *Memory) WriteWordAt(address uint, value uint16) error {
-	if address < 0 || address+1 > memory.Size {
+	if address < 0 || address > memory.Size-2 {
 		return errors.New(fmt.Sprintf("address 0x%x out of range [0...0x%x]", address, memory.Size))
 	}
 
